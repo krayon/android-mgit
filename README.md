@@ -13,7 +13,12 @@ This is a continuation of [the SGit project](https://github.com/sheimi/SGit).
 
 ## Notes
 
-[![Build Status](https://travis-ci.org/maks/MGit.svg?branch=master)](https://travis-ci.org/maks/MGit)
+### Build Status
+
+- [![Build Last Commit](https://github.com/krayon/android-mgit/actions/workflows/build-debug.yml/badge.svg)](https://github.com/krayon/android-mgit/actions/workflows/build-debug.yml)
+- [![Build Release](https://github.com/krayon/android-mgit/actions/workflows/build-release.yml/badge.svg)](https://github.com/krayon/android-mgit/actions/workflows/build-release.yml)
+
+### Other
 
 [![Join the chat at https://gitter.im/MGit-Android/Lobby](https://badges.gitter.im/MGit-Android/Lobby.svg)](https://gitter.im/MGit-Android/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
