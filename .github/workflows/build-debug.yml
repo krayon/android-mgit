@@ -26,3 +26,8 @@ jobs:
       run: ./cache_gradle_files.bash
     - name: Build with Gradle
       run: ./gradlew --no-daemon clean assembleDebug testDebug
+    - name: Upload artifacts
+      uses: krayon/github-action-upload-artifact@82c141cc518b40d92cc801eee768e7aafc9c2fa2 # v2.3.1
+      with:
+        name: mgit-debug.apk
+        path: app/build/outputs/apk/debug/app-debug.apk
