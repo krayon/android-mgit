@@ -1,6 +1,9 @@
-name: Build
+name: Build Debug
 
 on:
+  # Allow manual triggering
+  workflow_dispatch:
+
   # Trigger the workflow on push or pull request,
   # but only for the main branch
   push:
@@ -19,5 +22,7 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: 11
+    - name: Cache Gradle files
+      run: ./cache_gradle_files.bash
     - name: Build with Gradle
       run: ./gradlew --no-daemon clean assembleDebug testDebug
