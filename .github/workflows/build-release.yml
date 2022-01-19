@@ -1,0 +1,125 @@
+name: Build Release
+
+on:
+  # Allow manual triggering
+  workflow_dispatch:
+
+  # Trigger the workflow on tag
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@ec3a7ce113134d7a93b817d10a8272cb61118579 # v2.4.0
+
+    - name: Exit if not on main branch or expected name style
+      env:
+        VERSION_REF:            ${{ github.ref                     }}
+        VERSION_REF_NAME:       ${{ github.ref_name                }}
+      run: |
+        mainref="$(git name-rev --always --name-only --no-undefined origin/main)"
+        mainref="refs/${mainref%^*}"
+
+        echo "mainref: ${mainref}"
+        echo "tagref:  ${VERSION_REF}"
+        # TODO: Maybe work out how to NOT run on tags unless they exist on main branch?
+        #[ "${mainref}" == "${VERSION_REF}" ] || exit 1
+
+        echo "ref name: ${VERSION_REF_NAME}"
+        grep -q 'v[0-9]\+.[0-9]\+.[0-9]\+' <<<"${VERSION_REF_NAME}" || exit 1
+
+    - name: Get version
+      id: version
+      env:
+        VERSION_REF_NAME:       ${{ github.ref_name                }}
+      run: |
+        version="$(sed -n 's/^[ ]*versionName[ ]*\(.*\)$/\1/p' <'app/build.gradle'|tr -d '"'"'")"
+        [ "${VERSION_REF_NAME}" == "v${version}" ] && {
+          # Match
+          version="${VERSION_REF_NAME}"
+        } || {
+          version="${version}.${VERSION_REF_NAME}"
+        }
+        echo "::set-output name=version::${version}"
+
+    - name: set up JDK 11
+      uses: actions/setup-java@f0bb91606209742fe3ea40199be2f3ef195ecabf # v2.5.0
+      with:
+        distribution: 'temurin'
+        java-version: 11
+
+    - name: Create signing config
+      env:
+        RELEASE_STORE_KEY:      ${{ secrets.RELEASE_STORE_KEY       }}
+        RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD  }}
+        RELEASE_KEY_ALIAS:      ${{ secrets.RELEASE_KEY_ALIAS       }}
+        RELEASE_KEY_PASSWORD:   ${{ secrets.RELEASE_STORE_PASSWORD  }}
+      run: |
+        base64 -d <<<"${RELEASE_STORE_KEY}" >"${HOME}/store.jks"
+        sed -i \
+          -e 's#BUILD-populated-keyAlias#'"${RELEASE_KEY_ALIAS}"'#' \
+          -e 's#BUILD-populated-keyPassword#'"${RELEASE_KEY_PASSWORD}"'#' \
+          -e 's#BUILD-populated-storeFile#'"${HOME}/store.jks"'#' \
+          -e 's#BUILD-populated-storePassword#'"${RELEASE_STORE_PASSWORD}"'#' \
+          app/build.gradle
+
+    - name: Cache Gradle files
+      run: ./cache_gradle_files.bash
+    - name: Build with Gradle
+      run: ./gradlew --no-daemon clean assembleRelease
+
+    - name: Create Changelog
+      env:
+        VERSION_REF_NAME:       ${{ github.ref_name                }}
+      run: |
+        # FIXME: Due to clone being shallow, this CHANGELOG only ever contains 1 commit
+        # Get named tag and prior one ("v1.5.9..v1.5.10")
+        tags="$(git tag --list 'v*' --sort=version:refname\
+          |grep -B1 "^${VERSION_REF_NAME}$"\
+          |tr '\n' ' '\
+          |sed 's#^ *##;s# *$##;s# #..#'\
+        )"
+
+        # Get commit logs between the 2 tags
+        log_data="$(git log --no-merges ${tags}\
+          |sed '/^Date:/,/^$/d'\
+          |sed '/^commit/d'\
+        )"
+
+        >"CHANGELOG.md"
+        echo "# Changelog for ${VERSION_REF_NAME}"                           >>"CHANGELOG.md"
+        echo                                                                 >>"CHANGELOG.md"
+        echo "## Commits"                                                    >>"CHANGELOG.md"
+        echo                                                                 >>"CHANGELOG.md"
+        sed -n 's#^ \+#  #p' <<<"${log_data}"|uniq                           >>"CHANGELOG.md"
+        echo                                                                 >>"CHANGELOG.md"
+        echo "## Contributing Authors for ${VERSION_REF_NAME}"               >>"CHANGELOG.md"
+        echo                                                                 >>"CHANGELOG.md"
+        sed -n 's/^Author: *\(.*\) *<.*$/  - \1/pg' <<<"${log_data}"|sort -u >>"CHANGELOG.md"
+
+    - name: Create Release
+      uses: krayon/github-action-create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
+      id: create_release
+      with:
+        draft: false
+        prerelease: false
+        release_name: ${{ steps.version.outputs.version }}
+        #tag_name: ${{ github.ref }}
+        tag_name: ${{ steps.version.outputs.version }}
+        body_path: CHANGELOG.md
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+
+    - name: Upload artifact
+      uses: krayon/github-action-upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1.0.2
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: app/build/outputs/apk/release/app-release.apk
+        asset_name: mgit.${{ steps.version.outputs.version }}.apk
+        #asset_content_type: application/gzip
+        asset_content_type: application/octet-stream
