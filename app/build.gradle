@@ -42,10 +42,10 @@ android {
             }
         } else {
             release {
-                keyAlias ''
-                keyPassword ''
-                storeFile file('/empty')
-                storePassword ''
+                keyAlias 'BUILD-populated-keyAlias'
+                keyPassword 'BUILD-populated-keyPassword'
+                storeFile file('BUILD-populated-storeFile')
+                storePassword 'BUILD-populated-storePassword'
             }
         }
     }
